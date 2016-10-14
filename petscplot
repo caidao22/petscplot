@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # -*- mode: Python -*-
 from __future__ import division
-from pylab import *
+from numpy import *
+from matplotlib.pyplot import *
+import matplotlib
 import pprint, re, itertools, os.path, locale
 from collections import namedtuple
 from funcparserlib.lexer import Spec, make_tokenizer
@@ -353,7 +355,7 @@ def plot_strong(opts, logfiles):
             semilogx(np,eff,'-'+next(marker),label=next(name))
         else:
             line = loglog(np,time,'-'+next(marker),label=next(name))
-            loglog(ideal_np,ideal_time,line[0].get_color())
+            loglog(ideal_np,ideal_time,line[0].get_color(),label='ideal')
     xlim(min(allx)*0.7 if opts.xmin is None else opts.xmin,
          max(allx)*1.1 if opts.xmax is None else opts.xmax)
     xlabel('Number of processes')
@@ -431,7 +433,7 @@ def plot_wtime(opts, logfiles):
             semilogx(np,eff,'-'+next(marker),label=next(name))
         else:
             line = loglog(np,time,'-'+next(marker),label=next(name))
-            loglog(ideal_np,ideal_time,line[0].get_color())
+            loglog(ideal_np,ideal_time,'--',color='gray',label='ideal')
     xlim(min(allx)*0.7 if opts.xmin is None else opts.xmin,
          max(allx)*1.1 if opts.xmax is None else opts.xmax)
     xlabel('Number of processes')
@@ -441,8 +443,8 @@ def plot_wtime(opts, logfiles):
         ylabel('Parallel efficiency')
     else:
         ylim(min(ally)*0.8, max(ally)*1.1)
-        ylabel('Time (seconds)')
-    legend((opts.legend_loc if opts.legend_loc else 'upper right'), frameon=False)
+        ylabel('Wall Time (seconds)')
+    legend(numpoints=1,loc=(opts.legend_loc if opts.legend_loc else 'upper right'), frameon=False)
     if opts.title is None:
         title('Strong scaling (\\texttt{Wall time})')
     elif opts.title:
