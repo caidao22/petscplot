@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # -*- mode: Python -*-
 from __future__ import division
 from pylab import *
@@ -34,13 +34,14 @@ Event  = namedtuple('Event', 'name count time flops Mflops')
 Stage  = namedtuple('Stage', 'name events')
 
 class Run(object):
-    def __init__(self, levels, solves, exename, petsc_arch, hostname, np, stages, options, **args):
+    def __init__(self, levels, solves, exename, petsc_arch, hostname, np, wtime, stages, options, **args):
         self.levels     = levels
         self.solves     = solves
         self.exename    = exename
         self.petsc_arch = petsc_arch
         self.hostname   = hostname
         self.np         = np
+        self.wtime      = wtime
         self.stages     = stages
         self.options    = options
         self.__dict__.update(args)
@@ -94,6 +95,7 @@ def tokenize(str):
         MSpec('ksp_monitor', r'^\s+\d+ KSP Residual norm.*$'),
         MSpec('ksp_converged', r'^\s*Linear solve converged due to \w+$'),
         MSpec('ksp_diverged', r'^\s*Linear solve did not converge due to \w+$'),
+        MSpec('max_wall_time',r'^Time \(sec\):\s+\d\.\d{3}e[-+]\d\d\s+\d\.\d{5}\s+\d\.\d{3}e[-+]\d\d$'),
         MSpec('event', r'^\S{1,16}\s+\d+ \d\.\d \d\.\d{4}e[-+]\d\d \d\.\d \d\.\d\de[-+]\d\d \d\.\d (\d\.\de[-+]\d\d ){3}.*$'),
         MSpec('stage', r'^--- Event Stage \d+: .*$'),
         MSpec('memory_usage', r'^Memory usage is given in bytes:'),
@@ -112,7 +114,7 @@ def tokenize(str):
 def parse(seq):
     'Sequence(Token) -> object'
     Host = namedtuple('Host', 'exename arch host np')
-    LogSummary = namedtuple('LogSummary', 'host stages options')
+    LogSummary = namedtuple('LogSummary', 'host wtime stages options')
     def mkLevel(s):
         rfloat = r'[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?'
         rint   = r'[-+]?\d+'
@@ -154,12 +156,15 @@ def parse(seq):
         for x in solves:
             x.level = levels[-1-x.indent]
         if not log:
-            log = LogSummary(host=Host('unknown', 'unknown', 'unknown', -1), stages=[], options=[])
+            log = LogSummary(host=Host('unknown', 'unknown', 'unknown', -1), wtime=[], stages=[], options=[])
         h = log.host
-        return Run(levels, solves, h.exename, h.arch, h.host, h.np, log.stages, log.options)
+        return Run(levels, solves, h.exename, h.arch, h.host, h.np, log.wtime, log.stages, log.options)
     def mkHost(s):
         (exename, arch, host, np) = re.match(r'^(\S+) on a (\S+) named (\S+) with (\d+) processors?, by .*$', s).groups()
         return Host(exename, arch, host, int(np))
+    def mkMWTime(s):
+        mwtime = re.match(r'^Time \(sec\):\s+(\d\.\d{3}e[-+]\d\d)\s+\d\.\d{5}\s+\d\.\d{3}e[-+]\d\d$',s).groups()[0]
+        return float(mwtime)
 
     level = sometok('level') >> mkLevel
     kspit = sometok('ksp_monitor')   >> mkKSPIt
@@ -176,7 +181,8 @@ def parse(seq):
     option_table_entry = sometok('option_table_entry') >> mkOption
     option_table = skip(sometok('option_table_begin')) + many(option_table_entry) + skip(sometok('option_table_end')) >> dict
     host = sometok('hostline') >> mkHost
-    log_summary = skip(sometok('summary_begin')) + host + many(stage) + skip(memory_usage) + option_table >> unarg(LogSummary)
+    max_wall_time = sometok('max_wall_time') >> mkMWTime
+    log_summary = skip(sometok('summary_begin')) + host + max_wall_time + many(stage) + skip(memory_usage) + option_table >> unarg(LogSummary)
     petsc_log = many(level) + many(snes) + maybe(log_summary) + skip(finished) >> unarg(mkRun)
     return petsc_log.parse(seq)
 
@@ -330,13 +336,14 @@ def plot_strong(opts, logfiles):
     marker = itertools.cycle(list('osv^<>*D'))
     (plotstage,) = opts.stages
     (plotevent,) = opts.events
+
     name = name_segments(opts,logfiles)
     allx = array([])
     ally = array([])
     for logs in segment(logfiles):
         series = [parse(tokenize(read_file(fname))) for fname in logs]
         series.sort(cmp=lambda a,b: cmp(a.np,b.np)) # Sort files in increasing order of number of processes
-        solves = [s.solves[-1] for s in series]
+        #solves = [s.solves[-1] for s in series]
         np = array([s.np for s in series])
         time = array([r.stages[plotstage].events[plotevent].time for r in series])
         allx, ally = concatenate((allx,np)), concatenate((ally,time))
@@ -356,7 +363,7 @@ def plot_strong(opts, logfiles):
     else:
         ylim(min(ally)*0.8, max(ally)*1.1)
         ylabel('Time (seconds)')
-    legend(loc=(opts.legend_loc if opts.legend_loc else 'upper right'), frameon=False)
+    legend((opts.legend_loc if opts.legend_loc else 'upper right'), frameon=False)
     if opts.title is None:
         title('Strong scaling (\\texttt{%s})' % ', '.join(opts.events))
     elif opts.title:
@@ -398,6 +405,46 @@ def plot_weak(opts, logfiles):
     legend(loc=(opts.legend_loc if opts.legend_loc else 'upper left'))
     if opts.title is None:
         title('Weak scaling (\\texttt{%s})' % ', '.join(opts.events))
+    elif opts.title:
+        title(opts.title)
+
+def plot_wtime(opts, logfiles):
+    '''Plots strong scalability given a list of log files.  The file
+    sequence should have a constant global problem size with increasing
+    numbers of processes The result is a log-log plot showing time to
+    solve the problem with successively more processes.'''
+    marker = itertools.cycle(list('osv^<>*D'))
+
+    name = name_segments(opts,logfiles)
+    allx = array([])
+    ally = array([])
+    for logs in segment(logfiles):
+        series = [parse(tokenize(read_file(fname))) for fname in logs]
+        series.sort(cmp=lambda a,b: cmp(a.np,b.np)) # Sort files in increasing order of number of processes
+        #solves = [s.solves[-1] for s in series]
+        np = array([s.np for s in series])
+        time = array([r.wtime for r in series])
+        allx, ally = concatenate((allx,np)), concatenate((ally,time))
+        ideal_np, ideal_time = fit_ideal_loglog(np, time, slope=-1)
+        if opts.efficiency:
+            eff = ideal_time / time
+            semilogx(np,eff,'-'+next(marker),label=next(name))
+        else:
+            line = loglog(np,time,'-'+next(marker),label=next(name))
+            loglog(ideal_np,ideal_time,line[0].get_color())
+    xlim(min(allx)*0.7 if opts.xmin is None else opts.xmin,
+         max(allx)*1.1 if opts.xmax is None else opts.xmax)
+    xlabel('Number of processes')
+    xticks(np,np)
+    if opts.efficiency:
+        ylim(0,1.2)
+        ylabel('Parallel efficiency')
+    else:
+        ylim(min(ally)*0.8, max(ally)*1.1)
+        ylabel('Time (seconds)')
+    legend((opts.legend_loc if opts.legend_loc else 'upper right'), frameon=False)
+    if opts.title is None:
+        title('Strong scaling (\\texttt{Wall time})')
     elif opts.title:
         title(opts.title)
 
@@ -448,7 +495,7 @@ def main():
     parser = ArgumentParser(description='Plot analytics on PETSc program output')
     parser.add_argument('-f', '--format', choices='native png jpg eps pdf'.split(), help='Output format for plotting', dest='format')
     parser.add_argument('-m', '--mode', choices='talk poster paper'.split(), help='Formatting mode, affects weights and fonts', dest='mode', default='talk')
-    parser.add_argument('-t', '--type', choices='snes algorithmic weak strong'.split(), help='Plot type', dest='type', default='snes')
+    parser.add_argument('-t', '--type', choices='snes algorithmic weak strong wtime'.split(), help='Plot type', dest='type', default='snes')
     parser.add_argument('-o', '--output', help='Output filename', dest='output')
     parser.add_argument('--legend-labels', help='Labels for each item being plotted, colon (:) separated', dest='legend_labels', type=splitlist(':',str))
     parser.add_argument('--legend-loc', help='Location of legend (e.g. "upper left")', dest='legend_loc')
@@ -477,7 +524,8 @@ def main():
     {'snes': plot_snes,
      'algorithmic' : plot_algorithmic,
      'strong' : plot_strong,
-     'weak' : plot_weak
+     'weak' : plot_weak,
+     'wtime' : plot_wtime,
      }[opts.type](opts, opts.logfiles)
     if opts.output:
         savefig(opts.output)
