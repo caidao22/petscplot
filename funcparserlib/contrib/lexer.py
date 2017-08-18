@@ -22,18 +22,18 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 from re import MULTILINE
-from funcparserlib.lexer import Spec
+from funcparserlib.lexer import Token
 
 __all__ = ['make_comment', 'make_multiline_comment', 'newline', 'space']
 
 # Comments
 def make_comment(start):
-    return Spec('comment', r'%s.*' % start)
+    return ('comment', ((r'%s.*') % start,))
 
 def make_multiline_comment(open, close):
-    return Spec('comment', r'%s(.|[\r\n])*?%s' % (open, close), MULTILINE)
+    return ('comment', ((r'%s(.|[\r\n])*?%s') % (open, close), MULTILINE))
 
 # Common tokens
-newline = Spec('newline', r'[\r\n]+')
-space = Spec('space', r'[ \t\r\n]+')
+newline = ('newline', (r'[\r\n]+',))
+space = ('space', (r'[ \t\r\n]+',))
 

@@ -6,9 +6,10 @@ from matplotlib.pyplot import *
 import matplotlib
 import pprint, re, itertools, os.path, locale
 from collections import namedtuple
-from funcparserlib.lexer import Spec, make_tokenizer
+from re import MULTILINE
+from funcparserlib.lexer import make_tokenizer,Token
 from funcparserlib.contrib.common import sometok,unarg
-from funcparserlib.parser import maybe, many, oneplus, finished, skip, forward_decl, SyntaxError
+from funcparserlib.parser import maybe, many, oneplus, finished, skip, forward_decl, NoParseError
 
 #from IPython.Debugger import Tracer; debug_here = Tracer()
 
@@ -88,27 +89,26 @@ class Level(object):
 
 def tokenize(str):
     'str -> Sequence(Token)'
-    MSpec = lambda t,r: Spec(t,r,re.MULTILINE)
     specs = [
-        MSpec('level', r'^Level \d+.*$'),
-        MSpec('snes_monitor', r'^\s+\d+ SNES Function norm.*$'),
-        MSpec('snes_converged', r'^\s*Nonlinear solve converged due to \w+$'),
-        MSpec('snes_diverged', r'^\s*Nonlinear solve did not converge due to \w+$'),
-        MSpec('ksp_monitor', r'^\s+\d+ KSP Residual norm.*$'),
-        MSpec('ksp_converged', r'^\s*Linear solve converged due to \w+$'),
-        MSpec('ksp_diverged', r'^\s*Linear solve did not converge due to \w+$'),
-        MSpec('max_wall_time',r'^Time \(sec\):\s+\d\.\d{3}e[-+]\d\d\s+\d\.\d{5}\s+\d\.\d{3}e[-+]\d\d$'),
-        MSpec('event', r'^\S{1,16}\s+\d+ \d\.\d \d\.\d{4}e[-+]\d\d \d\.\d \d\.\d\de[-+]\d\d \d\.\d (\d\.\de[-+]\d\d ){3}.*$'),
-        MSpec('stage', r'^--- Event Stage \d+: .*$'),
-        MSpec('memory_usage', r'^Memory usage is given in bytes:'),
-        MSpec('summary_begin', r'^---------------------------------------------- PETSc Performance Summary: ----------------------------------------------$'),
-        MSpec('hostline', r'^\S+ on a \S+ named \S+ with \d+ processors?, by .*$'),
-        MSpec('option_table_begin', r'^#PETSc Option Table entries:$'),
-        MSpec('option_table_entry', r'^-\w+(\s+\w+)?$'),
-        MSpec('option_table_end', r'^#End of? PETSc Option Table entries$'),
-        Spec('nl', r'[\r\n]+'),
-        MSpec('other', r'^.*$') # Catches all lines that we don't understand
-        ]
+        (u'level', (ur'^Level \d+.*$',MULTILINE)),
+        (u'snes_monitor', (ur'^\s+\d+ SNES Function norm.*$',MULTILINE)),
+        (u'snes_converged', (ur'^\s*Nonlinear solve converged due to \w+$',MULTILINE)),
+        (u'snes_diverged', (ur'^\s*Nonlinear solve did not converge due to \w+$',MULTILINE)),
+        (u'ksp_monitor', (ur'^\s+\d+ KSP Residual norm.*$',MULTILINE)),
+        (u'ksp_converged', (ur'^\s*Linear solve converged due to \w+$',MULTILINE)),
+        (u'ksp_diverged', (ur'^\s*Linear solve did not converge due to \w+$',MULTILINE)),
+        (u'max_wall_time',(ur'^Time \(sec\):\s+\d\.\d{3}e[-+]\d\d\s+\d\.\d{5}\s+\d\.\d{3}e[-+]\d\d$',MULTILINE)),
+        (u'event', (ur'^\S{1,16}\s+\d+ \d\.\d \d\.\d{4}e[-+]\d\d \d\.\d \d\.\d\de[-+]\d\d \d\.\d (\d\.\de[-+]\d\d ){3}.*$',MULTILINE)),
+        (u'stage', (ur'^--- Event Stage \d+: .*$',MULTILINE)),
+        (u'memory_usage', (ur'^Memory usage is given in bytes:',MULTILINE)),
+        (u'summary_begin', (ur'^---------------------------------------------- PETSc Performance Summary: ----------------------------------------------$',MULTILINE)),
+        (u'hostline', (ur'^\S+ on a \S+ named \S+ with \d+ processors?, by .*$',MULTILINE)),
+        (u'option_table_begin', (ur'^#PETSc Option Table entries:$',MULTILINE)),
+        (u'option_table_entry', (ur'^-\w+(\s+\w+)?$',MULTILINE)),
+        (u'option_table_end', (ur'^#End of? PETSc Option Table entries$',MULTILINE)),
+        (u'nl', (ur'[\r\n]+',)),
+        (u'other', (ur'^.*$',MULTILINE)), # Catches all lines that we don't understand
+    ]
     ignored = 'nl other'.split()
     t = make_tokenizer(specs)
     return [x for x in t(str) if x.type not in ignored]
@@ -225,7 +225,7 @@ def set_sizes_talk(opts):
     fig_size = get_dims(opts, 900)
     rcParams.update({'axes.titlesize': 18,
                      'axes.labelsize': 18,
-                     'text.fontsize': 24,
+                     'font.size': 24,
                      'legend.fontsize': 18,
                      #'legend.markerscale' : 8,
                      'xtick.labelsize': 18,
@@ -238,7 +238,7 @@ def set_sizes_poster(opts):
     fig_size = get_dims(opts, 1240)
     rcParams.update({'axes.titlesize': 24,
                      'axes.labelsize': 24,
-                     'text.fontsize': 32,
+                     'font.size': 32,
                      'lines.linewidth': 3,
                      'lines.markersize': 10,
                      'legend.fontsize': 24,
@@ -252,7 +252,7 @@ def set_sizes_paper(opts):
     fig_size = get_dims(opts, 324)
     rcParams.update({'axes.titlesize': 11,
                      'axes.labelsize': 9,
-                     'text.fontsize': 9,
+                     'font.size': 9,
                      'lines.linewidth': 1,
                      'legend.fontsize': 9,
                      #'legend.markerscale' : 8,
@@ -495,7 +495,7 @@ def main():
                 return args
 
     parser = ArgumentParser(description='Plot analytics on PETSc program output')
-    parser.add_argument('-f', '--format', choices='native png jpg eps pdf'.split(), help='Output format for plotting', dest='format')
+    parser.add_argument('-f', '--format', choices='native png pdf svg ps eps'.split(), help='Output format for plotting', dest='format')
     parser.add_argument('-m', '--mode', choices='talk poster paper'.split(), help='Formatting mode, affects weights and fonts', dest='mode', default='talk')
     parser.add_argument('-t', '--type', choices='snes algorithmic weak strong wtime'.split(), help='Plot type', dest='type', default='snes')
     parser.add_argument('-o', '--output', help='Output filename', dest='output')
@@ -522,7 +522,7 @@ def main():
         else:
             raise RuntimeError('Suffix "%s" not recognized, use a recognized extension, or set manually with --format' % ext)
     print('Plotting %s using format %s from files: %s' % (opts.type, opts.format, ' '.join(opts.logfiles)))
-    if format != 'native': rcParams.update({'backend': format})
+    if opts.format != 'native': rcParams.update({'backend': 'Agg'})
     {'snes': plot_snes,
      'algorithmic' : plot_algorithmic,
      'strong' : plot_strong,
