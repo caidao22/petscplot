@@ -154,13 +154,30 @@ def parse(seq):
         return Stage(name, eventdict)
     def mkOption(s):
         return re.match(r'^(-\w+)(?:\s+(.+))?$',s).groups()
-    def mkRun(levels, solves, log):
+    def mkRun(levels, solves, logs):
         for x in solves:
             x.level = levels[-1-x.indent]
-        if not log:
-            log = LogSummary(host=Host('unknown', 'unknown', 'unknown', -1), wtime=[], stages=[], options=[])
-        h = log.host
-        return Run(levels, solves, h.exename, h.arch, h.host, h.np, log.wtime, log.stages, log.options)
+        if not logs:
+            logs = LogSummary(host=Host('unknown', 'unknown', 'unknown', -1), wtime=[], stages=[], options=[])
+        exename = logs[0].host.exename
+        arch = logs[0].host.arch
+        host = logs[0].host.host
+        np = logs[0].host.np
+        wtime = logs[0].wtime
+        stages = logs[0].stages
+        options = logs[0].options
+        if len(logs) > 1:
+            meanwtime = sum(h.wtime for h in logs)/len(logs)
+            rej = 0.15
+            logs = filter(lambda h: h.wtime<(1+rej)*meanwtime and h.wtime>(1-rej)*meanwtime,logs) # Exclude outliers
+            nlogs = len(logs)
+            wtime = sum(h.wtime for h in logs)/nlogs
+            for i,stage in enumerate(stages):
+                for event in stage.events:
+                    stage.events[event]._replace(time = sum([h.stages[i].events[event].time for h in logs])/nlogs)
+                    stage.events[event]._replace(flops = sum([h.stages[i].events[event].flops for h in logs])/nlogs)
+                    stage.events[event]._replace(Mflops = sum([h.stages[i].events[event].Mflops for h in logs])/nlogs)
+        return Run(levels, solves, exename, arch, host, np, wtime, stages, options)
     def mkHost(s):
         (exename, arch, host, np) = re.match(r'^(\S+) on a (\S+) named (\S+) with (\d+) processors?, by .*$', s).groups()
         return Host(exename, arch, host, int(np))
@@ -185,7 +202,7 @@ def parse(seq):
     host = sometok('hostline') >> mkHost
     max_wall_time = sometok('max_wall_time') >> mkMWTime
     log_summary = skip(sometok('summary_begin')) + host + max_wall_time + many(stage) + skip(memory_usage) + option_table >> unarg(LogSummary)
-    petsc_log = many(level) + many(snes) + maybe(log_summary) + skip(finished) >> unarg(mkRun)
+    petsc_log = many(level) + many(snes) + many(log_summary) + skip(finished) >> unarg(mkRun)
     return petsc_log.parse(seq)
 
 def read_file(fname):
