@@ -216,6 +216,7 @@ def fit_loglog(x, y, flag='mean'):
         return exp(log(x)*m + b)
     else:
         raise RuntimeError('not implemented')
+
 def fit_ideal_loglog(x,y,slope):
     xmin, ymin = log(x[0]), log(y[0])
     b = ymin - xmin*slope;
@@ -467,6 +468,47 @@ def plot_wtime(opts, logfiles):
     elif opts.title:
         title(opts.title)
 
+def plot_flop(opts, logfiles):
+    '''Plots strong scalability given a list of log files.  The file
+    sequence should have a constant global problem size with increasing
+    numbers of processes The result is a log-log plot showing time to
+    solve the problem with successively more processes.'''
+    marker = itertools.cycle(list('osv^<>*D'))
+    (plotstage,) = opts.stages
+    plotevents = opts.events
+    name = name_segments(opts,logfiles)
+    colors = 'rgbmcyk'
+    allx = array([])
+    ally = array([])
+    shift = 0
+    for i,logs in enumerate(segment(logfiles)):
+        series = [parse(tokenize(read_file(fname))) for fname in logs]
+        series.sort(cmp=lambda a,b: cmp(a.np,b.np)) # Sort files in increasing order of number of processes
+        #solves = [s.solves[-1] for s in series]
+        np = array([s.np for s in series])
+        lastline = None
+        for j,event in enumerate(plotevents):
+          flop = array([s.stages[plotstage].events[event].Mflops/1024 for s in series])
+          allx = concatenate((allx,np))
+          ally = concatenate((ally,flop))
+          shift += j*max(allx)*1.1
+          line = loglog(np+shift,flop,'-'+next(marker),label=next(name))
+          #ideal_np,ideal_flop = fit_ideal_loglog(np,flop,slope=1)
+          #loglog(ideal_np+shift,ideal_flop,'--',color='gray',label='ideal')
+    xlim(min(allx)*0.7 if opts.xmin is None else opts.xmin,
+         max(allx)*1.1 if opts.xmax is None else opts.xmax)
+    xlabel('Number of processes')
+    tick_params(axis='x',which='minor',bottom='off')
+    xticks(np,np)
+    yticks([1,2,5,10,20,30,40],[1,2,5,10,20,30,40])
+    ylim(min(ally)*0.8, max(ally)*1.6)
+    ylabel('Performance [\\texttt{Gflop/s}]')
+    legend(numpoints=1,loc=(opts.legend_loc if opts.legend_loc else 'upper left'), frameon=False)
+    if opts.title is None:
+        title('Strong scaling')
+    elif opts.title:
+        title(opts.title)
+
 def splitlist(sep, build):
     def constructor(string):
         return [build(x) for x in string.split(sep)]
@@ -514,7 +556,7 @@ def main():
     parser = ArgumentParser(description='Plot analytics on PETSc program output')
     parser.add_argument('-f', '--format', choices='native png pdf svg ps eps'.split(), help='Output format for plotting', dest='format')
     parser.add_argument('-m', '--mode', choices='talk poster paper'.split(), help='Formatting mode, affects weights and fonts', dest='mode', default='talk')
-    parser.add_argument('-t', '--type', choices='snes algorithmic weak strong wtime'.split(), help='Plot type', dest='type', default='snes')
+    parser.add_argument('-t', '--type', choices='snes algorithmic weak strong wtime flop'.split(), help='Plot type', dest='type', default='snes')
     parser.add_argument('-o', '--output', help='Output filename', dest='output')
     parser.add_argument('--legend-labels', help='Labels for each item being plotted, colon (:) separated', dest='legend_labels', type=splitlist(':',str))
     parser.add_argument('--legend-loc', help='Location of legend (e.g. "upper left")', dest='legend_loc')
@@ -545,6 +587,7 @@ def main():
      'strong' : plot_strong,
      'weak' : plot_weak,
      'wtime' : plot_wtime,
+     'flop' : plot_flop,
      }[opts.type](opts, opts.logfiles)
     if opts.output:
         savefig(opts.output)
