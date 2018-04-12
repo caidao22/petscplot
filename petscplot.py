@@ -1,13 +1,18 @@
-#!/usr/bin/env python2.7
+#! /usr/bin/env python3
 # -*- mode: Python -*-
 from __future__ import division
+from __future__ import print_function
+from builtins import map
+from builtins import next
+from builtins import range
+from builtins import object
 from numpy import *
 from matplotlib.pyplot import *
 import matplotlib.ticker as ticker
 import matplotlib
 import pprint, re, itertools, os.path, locale
 from collections import namedtuple
-from re import MULTILINE
+from re import compile,MULTILINE
 from funcparserlib.lexer import make_tokenizer,Token
 from funcparserlib.contrib.common import sometok,unarg
 from funcparserlib.parser import maybe, many, oneplus, finished, skip, forward_decl, NoParseError
@@ -50,11 +55,11 @@ class Run(object):
         self.options    = options
         self.__dict__.update(args)
     def __repr__(self):
-        return 'Run(%s)' % ', '.join('%s=%r' % (k,v) for (k,v) in self.__dict__.items())
+        return 'Run(%s)' % ', '.join('%s=%r' % (k,v) for (k,v) in list(self.__dict__.items()))
 
 def span(pred):
     def go(lst):
-        for i in xrange(len(lst)):
+        for i in range(len(lst)):
             if not pred(lst[i]):
                 return lst[:i], lst[i:]
         return (lst,[])
@@ -80,7 +85,7 @@ class Level(object):
         # Input validation
         assert(self.M*self.N*self.P == self.count)
         fuzzy_equals = lambda a,b: abs(a-b) / (abs(a)+abs(b)) < 1e-3
-        for (l,m,h) in map(lambda s: s.split(),['Lx M hx','Ly N hy']):
+        for (l,m,h) in [s.split() for s in ['Lx M hx','Ly N hy']]:
             assert(fuzzy_equals(getattr(self,l)/getattr(self,m), getattr(self,h)))
         if (P > 1):
             assert(fuzzy_equals(self.Lz/(self.P-1), self.hz))
@@ -91,24 +96,24 @@ class Level(object):
 def tokenize(str):
     'str -> Sequence(Token)'
     specs = [
-        (u'level', (ur'^Level \d+.*$',MULTILINE)),
-        (u'snes_monitor', (ur'^\s+\d+ SNES Function norm.*$',MULTILINE)),
-        (u'snes_converged', (ur'^\s*Nonlinear solve converged due to \w+$',MULTILINE)),
-        (u'snes_diverged', (ur'^\s*Nonlinear solve did not converge due to \w+$',MULTILINE)),
-        (u'ksp_monitor', (ur'^\s+\d+ KSP Residual norm.*$',MULTILINE)),
-        (u'ksp_converged', (ur'^\s*Linear solve converged due to \w+$',MULTILINE)),
-        (u'ksp_diverged', (ur'^\s*Linear solve did not converge due to \w+$',MULTILINE)),
-        (u'max_wall_time',(ur'^Time \(sec\):\s+\d\.\d{3}e[-+]\d\d\s+\d\.\d{5}\s+\d\.\d{3}e[-+]\d\d$',MULTILINE)),
-        (u'event', (ur'^\S{1,16}\s+\d+ \d\.\d \d\.\d{4}e[-+]\d\d \d\.\d \d\.\d\de[-+]\d\d \d\.\d (\d\.\de[-+]\d\d ){2}.*$',MULTILINE)),
-        (u'stage', (ur'^--- Event Stage \d+: .*$',MULTILINE)),
-        (u'memory_usage', (ur'^Memory usage is given in bytes:',MULTILINE)),
-        (u'summary_begin', (ur'^---------------------------------------------- PETSc Performance Summary: ----------------------------------------------$',MULTILINE)),
-        (u'hostline', (ur'^\S+ on a \S+ named \S+ with \d+ processors?, by .*$',MULTILINE)),
-        (u'option_table_begin', (ur'^#PETSc Option Table entries:$',MULTILINE)),
-        (u'option_table_entry', (ur'^-\w+(\s+\w+)?$',MULTILINE)),
-        (u'option_table_end', (ur'^#End of? PETSc Option Table entries$',MULTILINE)),
-        (u'nl', (ur'[\r\n]+',)),
-        (u'other', (ur'^.*$',MULTILINE)), # Catches all lines that we don't understand
+        (u'level', (r'^Level \d+.*$',MULTILINE)),
+        (u'snes_monitor', (r'^\s+\d+ SNES Function norm.*$',MULTILINE)),
+        (u'snes_converged', (r'^\s*Nonlinear solve converged due to \w+$',MULTILINE)),
+        (u'snes_diverged', (r'^\s*Nonlinear solve did not converge due to \w+$',MULTILINE)),
+        (u'ksp_monitor', (r'^\s+\d+ KSP Residual norm.*$',MULTILINE)),
+        (u'ksp_converged', (r'^\s*Linear solve converged due to \w+$',MULTILINE)),
+        (u'ksp_diverged', (r'^\s*Linear solve did not converge due to \w+$',MULTILINE)),
+        (u'max_wall_time',(r'^Time \(sec\):\s+\d\.\d{3}e[-+]\d\d\s+\d\.\d{5}\s+\d\.\d{3}e[-+]\d\d$',MULTILINE)),
+        (u'event', (r'^\S{1,16}\s+\d+ \d\.\d \d\.\d{4}e[-+]\d\d \d\.\d \d\.\d\de[-+]\d\d \d\.\d (\d\.\de[-+]\d\d ){2}.*$',MULTILINE)),
+        (u'stage', (r'^--- Event Stage \d+: .*$',MULTILINE)),
+        (u'memory_usage', (r'^Memory usage is given in bytes:',MULTILINE)),
+        (u'summary_begin', (r'^---------------------------------------------- PETSc Performance Summary: ----------------------------------------------$',MULTILINE)),
+        (u'hostline', (r'^\S+ on a \S+ named \S+ with \d+ processors?, by .*$',MULTILINE)),
+        (u'option_table_begin', (r'^#PETSc Option Table entries:$',MULTILINE)),
+        (u'option_table_entry', (r'^-\w+(\s+\w+)?$',MULTILINE)),
+        (u'option_table_end', (r'^#End of? PETSc Option Table entries$',MULTILINE)),
+        (u'nl', (r'[\r\n]+',)),
+        (u'other', (r'^.*$',MULTILINE)), # Catches all lines that we don't understand
     ]
     ignored = 'nl other'.split()
     t = make_tokenizer(specs)
@@ -123,7 +128,7 @@ def parse(seq):
         rint   = r'[-+]?\d+'
         capture = lambda m: '('+m+')'
         within_space = lambda m: r'\s*'+m+r'\s*'
-        cfloat, cint = map(lambda m: within_space(capture(m)),[rfloat,rint])
+        cfloat, cint = [within_space(capture(m)) for m in [rfloat,rint]]
         x = within_space('x')
         m = re.match('Level'+cint+r'domain size \(m\)'+cfloat+x+cfloat+x+cfloat
                      +', num elements'+cint+x+cint+x+cint+r'\('+cint
@@ -170,7 +175,7 @@ def parse(seq):
         if len(logs) > 1:
             meanwtime = sum(h.wtime for h in logs)/len(logs)
             rej = 0.15
-            logs = filter(lambda h: h.wtime<(1+rej)*meanwtime and h.wtime>(1-rej)*meanwtime,logs) # Exclude outliers
+            logs = [h for h in logs if h.wtime<(1+rej)*meanwtime and h.wtime>(1-rej)*meanwtime] # Exclude outliers
             nlogs = len(logs)
             wtime = sum(h.wtime for h in logs)/nlogs
             for i,stage in enumerate(stages):
@@ -318,7 +323,7 @@ def segment(logfiles):
            ['a', 'b', ':', 'c', 'd', 'e']
        into a generator of lists
            [['a', 'b'], ['c', 'd', 'e']]'''
-    return filter(lambda x: x != [':'], groupBy(lambda x: x==':', logfiles))
+    return [x for x in groupBy(lambda x: x==':', logfiles) if x != [':']]
 
 def name_segments(opts,logfiles):
     if opts.legend_labels:
@@ -367,7 +372,7 @@ def plot_strong(opts, logfiles):
     ally = array([])
     for logs in segment(logfiles):
         series = [parse(tokenize(read_file(fname))) for fname in logs]
-        series.sort(cmp=lambda a,b: cmp(a.np,b.np)) # Sort files in increasing order of number of processes
+        series.sort(key=lambda a : a.np) # Sort files in increasing order of number of processes
         #solves = [s.solves[-1] for s in series]
         np = array([s.np for s in series])
         time = array([r.stages[plotstage].events[plotevent].time for r in series])
@@ -410,7 +415,7 @@ def plot_weak(opts, logfiles):
     ally = array([])
     for i,logs in enumerate(segment(logfiles)):
         series = [parse(tokenize(read_file(fname))) for fname in logs]
-        series.sort(cmp=lambda a,b: cmp(a.np,b.np)) # Sort files in increasing order of number of processes
+        series.sort(key=lambda a : a.np) # Sort files in increasing order of number of processes
         np = array([s.np for s in series])
         lastline = None
         seriesname = names[i]
@@ -423,7 +428,7 @@ def plot_weak(opts, logfiles):
             bottom += time
         ally = concatenate((ally,bottom))
         allx = concatenate((allx,np))
-        xticks(xvalues+barwidth/2, map(str,np))
+        xticks(xvalues+barwidth/2, list(map(str,np)))
     ylim(0, max(ally)*1.1)
     xlabel('Number of processes')
     ylabel('Time (seconds)')
@@ -445,7 +450,7 @@ def plot_wtime(opts, logfiles):
     ally = array([])
     for logs in segment(logfiles):
         series = [parse(tokenize(read_file(fname))) for fname in logs]
-        series.sort(cmp=lambda a,b: cmp(a.np,b.np)) # Sort files in increasing order of number of processes
+        series.sort(key=lambda a : a.np) # Sort files in increasing order of number of processes
         #solves = [s.solves[-1] for s in series]
         np = array([s.np for s in series])
         time = array([r.wtime for r in series])
@@ -489,7 +494,7 @@ def plot_flop(opts, logfiles):
     shift = 0
     for i,logs in enumerate(segment(logfiles)):
         series = [parse(tokenize(read_file(fname))) for fname in logs]
-        series.sort(cmp=lambda a,b: cmp(a.np,b.np)) # Sort files in increasing order of number of processes
+        series.sort(key=lambda a : a.np) # Sort files in increasing order of number of processes
         #solves = [s.solves[-1] for s in series]
         np = array([s.np for s in series])
         lastline = None
@@ -570,7 +575,7 @@ def parse_options():
                 setattr(args, self.nargskey, nargs)
                 return args
 
-    print sys.argv
+    print(sys.argv)
     parser = ArgumentParser(description='Plot analytics on PETSc program output')
     parser.add_argument('-f', '--format', choices='native png pdf svg ps eps'.split(), help='Output format for plotting', dest='format')
     parser.add_argument('-m', '--mode', choices='talk poster paper'.split(), help='Formatting mode, affects weights and fonts', dest='mode', default='talk')
