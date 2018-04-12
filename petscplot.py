@@ -510,7 +510,7 @@ def plot_flop(opts, logfiles):
          max(allx)*1.1 if opts.xmax is None else opts.xmax)
     ax.set_xlabel('Number of processes')
     ax.set_ylabel('Performance [\\texttt{Gflop/s}]')
-    ax.tick_params(axis='x',which='minor',bottom='off') # turn off minor ticks on x axis
+    ax.tick_params(axis='x',which='minor',bottom=False) # turn off minor ticks on x axis
     ax.xaxis.set_ticks(np)
     ax.xaxis.set_ticklabels(np)
     ax.yaxis.set_ticks([1,2,5,10,20,30,40,50])
