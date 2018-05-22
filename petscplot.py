@@ -290,6 +290,23 @@ def set_sizes_paper(opts):
     else :
       subplots_adjust(left=0.12,right=0.975,bottom=0.15,top=0.93)
 
+def set_sizes_paper_bar(opts):
+    fig_size = get_dims(opts, 324)
+    rcParams.update({'axes.titlesize': 10,
+                     'axes.labelsize': 10,
+                     'font.size': 15,
+                     'lines.linewidth': 1,
+                     'lines.markersize':8,
+                     'legend.fontsize': 8,
+                     'xtick.labelsize': 8,
+                     'ytick.labelsize': 8,
+                     'text.usetex': True,
+                     'figure.figsize': fig_size})
+    if opts.legend_outside :
+      subplots_adjust(left=0.09,right=0.975,bottom=0.11,top=0.93)
+    else :
+      subplots_adjust(left=0.12,right=0.975,bottom=0.15,top=0.93)
+
 def plot_snes_convergence(solves, sequence=False, withksp=False, legend_loc='lower left'):
     marker = itertools.cycle(list('osv^<>*D'))
     offset = 0
@@ -578,7 +595,7 @@ def parse_options():
     print(sys.argv)
     parser = ArgumentParser(description='Plot analytics on PETSc program output')
     parser.add_argument('-f', '--format', choices='native png pdf svg ps eps'.split(), help='Output format for plotting', dest='format')
-    parser.add_argument('-m', '--mode', choices='talk poster paper'.split(), help='Formatting mode, affects weights and fonts', dest='mode', default='talk')
+    parser.add_argument('-m', '--mode', choices='talk poster paper paper_bar'.split(), help='Formatting mode, affects weights and fonts', dest='mode', default='talk')
     parser.add_argument('-t', '--type', choices='snes algorithmic weak strong wtime flop'.split(), help='Plot type', dest='type', default='snes')
     parser.add_argument('-o', '--output', help='Output filename', dest='output')
     parser.add_argument('--legend-labels', help='Labels for each item being plotted, colon (:) separated', dest='legend_labels', type=splitlist(':',str))
@@ -596,7 +613,7 @@ def parse_options():
     parser.add_argument('logfiles', nargs='+', type=str, help='List of files to process, usually with -log_summary')
     opts = parser.parse_args()
 
-    {'talk' : set_sizes_talk, 'poster' : set_sizes_poster, 'paper' : set_sizes_paper}[opts.mode](opts)
+    {'talk' : set_sizes_talk, 'poster' : set_sizes_poster, 'paper' : set_sizes_paper,'paper_bar' : set_sizes_paper_bar}[opts.mode](opts)
     if opts.output and not opts.format:
         ext = os.path.splitext(opts.output)[1]
         supported = {'.png':'png', '.jpg':'jpg', '.eps':'eps', '.pdf':'pdf'}
